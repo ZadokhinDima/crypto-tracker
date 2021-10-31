@@ -35,7 +35,9 @@ class BBStrategy(val binanceClient: BinanceClient, val telegramClient: TelegramC
                 val additionalOrder = binanceClient.createBuyOrderMarketPrice(currency, qty)
                 telegramClient.sendNotification("Докупляю за ${additionalOrder.cummulativeQuoteQty}.")
                 println("CREATED BUY ORDER: $additionalOrder")
-                instance!!.addOrder(additionalOrder)
+                if (additionalOrder.status == "FILLED") {
+                    instance!!.addOrder(additionalOrder)
+                }
             }
         }
     }
