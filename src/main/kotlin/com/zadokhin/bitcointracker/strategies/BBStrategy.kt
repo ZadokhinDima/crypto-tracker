@@ -16,7 +16,8 @@ class BBStrategy(val binanceClient: BinanceClient, val telegramClient: TelegramC
     @Synchronized
     fun start(currency: String) {
         if (instance == null) {
-            var firstOrder = binanceClient.createBuyOrderMarketPrice(currency, qty)
+            val firstOrder = binanceClient.createBuyOrderMarketPrice(currency, qty)
+            println("CREATED BUY ORDER: $firstOrder")
             telegramClient.sendNotification("Зайшов по ${firstOrder.price}.")
             instance = StrategyInstance(firstOrder)
         }
@@ -25,11 +26,13 @@ class BBStrategy(val binanceClient: BinanceClient, val telegramClient: TelegramC
     @Synchronized
     fun process() {
         if (instance != null) {
+            println("process order called...")
             val currency = instance!!.currency
             val currentPrice = binanceClient.getPrice(currency)
             if (currentPrice < instance!!.lastBuyPrice * 0.99) {
                 val additionalOrder = binanceClient.createBuyOrderMarketPrice(currency, qty)
                 telegramClient.sendNotification("Докупляю по ${additionalOrder.price}.")
+                println("CREATED BUY ORDER: $additionalOrder")
                 instance!!.addOrder(additionalOrder)
             }
         }
@@ -39,6 +42,7 @@ class BBStrategy(val binanceClient: BinanceClient, val telegramClient: TelegramC
     fun finish() {
         if (instance != null) {
             val sellOrder = binanceClient.createSellOrderMarketPrice(instance!!.currency, instance!!.qty)
+            println("CREATED SELL ORDER: $sellOrder")
             telegramClient.sendNotification("Продав за ${sellOrder.price}.")
             calculateProfit(instance!!.buys, sellOrder)
         }

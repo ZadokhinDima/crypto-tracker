@@ -10,6 +10,7 @@ class WebhookController(val strategiesService: StrategiesService) {
 
     @PostMapping("/webhook")
     fun catchTrigger(@RequestBody webhook: WebhookInfo): ResponseEntity<String> {
+        println(webhook)
         if (webhook.trigger == TriggerType.LOWER) {
             strategiesService.startBB("BTCBUSD")
         }
