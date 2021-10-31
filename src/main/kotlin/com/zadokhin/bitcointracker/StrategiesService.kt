@@ -1,18 +1,27 @@
 package com.zadokhin.bitcointracker
 
-import com.fasterxml.jackson.annotation.JsonInclude
-import com.fasterxml.jackson.annotation.JsonProperty
-import org.springframework.beans.factory.annotation.Value
+import com.zadokhin.bitcointracker.strategies.BBStrategy
 import org.springframework.scheduling.annotation.EnableScheduling
-import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
-import org.springframework.web.client.HttpClientErrorException
-import org.springframework.web.client.RestTemplate
-import java.util.*
 
 @Service
 @EnableScheduling
-class StrategiesService(val binanceClient: BinanceClient, val telegramClient: TelegramClient) {
+class StrategiesService(
+    val binanceClient: BinanceClient,
+    val bbStrategy: BBStrategy, val telegramClient: TelegramClient
+) {
+
+    fun startBB(currency: String) {
+        bbStrategy.start(currency)
+    }
+
+    fun updateBB() {
+        bbStrategy.process()
+    }
+
+    fun stopBB() {
+        bbStrategy.finish()
+    }
 
     fun buysPercentage(currency: String, limit: Int) {
         val lastTrades = binanceClient.getLastTrades(currency, limit)
@@ -35,7 +44,6 @@ class StrategiesService(val binanceClient: BinanceClient, val telegramClient: Te
     }
 
 }
-
 
 
 fun Double.format(digits: Int) = "%.${digits}f".format(this)

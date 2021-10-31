@@ -12,6 +12,11 @@ class FeaturesScheduling(val strategiesService: StrategiesService) {
         "BTCUSDT",
     )
 
+    @Scheduled(cron = "0/30 * * * * *")
+    fun bbStrategy() {
+        strategiesService.updateBB()
+    }
+
     //@Scheduled(cron = "0/10 * * * * *")
     fun buysPercentage() {
         val limit = 100
