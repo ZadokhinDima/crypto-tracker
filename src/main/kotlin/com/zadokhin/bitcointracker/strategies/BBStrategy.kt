@@ -17,9 +17,11 @@ class BBStrategy(val binanceClient: BinanceClient, val telegramClient: TelegramC
     fun start(currency: String) {
         if (instance == null) {
             val firstOrder = binanceClient.createBuyOrderMarketPrice(currency, qty)
-            println("CREATED BUY ORDER: $firstOrder")
-            telegramClient.sendNotification("Зайшов по ${firstOrder.price}.")
-            instance = StrategyInstance(firstOrder)
+            if (firstOrder.status == "FILLED") {
+                println("CREATED BUY ORDER: $firstOrder")
+                telegramClient.sendNotification("Зайшов за ${firstOrder.cummulativeQuoteQty} $.")
+                instance = StrategyInstance(firstOrder)
+            }
         }
     }
 
@@ -29,9 +31,9 @@ class BBStrategy(val binanceClient: BinanceClient, val telegramClient: TelegramC
             println("process order called...")
             val currency = instance!!.currency
             val currentPrice = binanceClient.getPrice(currency)
-            if (currentPrice < instance!!.lastBuyPrice * 0.99) {
+            if (currentPrice < instance!!.lastBuyPrice * 0.997) {
                 val additionalOrder = binanceClient.createBuyOrderMarketPrice(currency, qty)
-                telegramClient.sendNotification("Докупляю по ${additionalOrder.price}.")
+                telegramClient.sendNotification("Докупляю за ${additionalOrder.cummulativeQuoteQty}.")
                 println("CREATED BUY ORDER: $additionalOrder")
                 instance!!.addOrder(additionalOrder)
             }
@@ -41,18 +43,23 @@ class BBStrategy(val binanceClient: BinanceClient, val telegramClient: TelegramC
     @Synchronized
     fun finish() {
         if (instance != null) {
-            val sellOrder = binanceClient.createSellOrderMarketPrice(instance!!.currency, instance!!.qty)
-            println("CREATED SELL ORDER: $sellOrder")
-            telegramClient.sendNotification("Продав за ${sellOrder.price}.")
-            calculateProfit(instance!!.buys, sellOrder)
+            do {
+                val sellOrder = binanceClient.createSellOrderMarketPrice(instance!!.currency, instance!!.qty)
+                println("CREATED SELL ORDER: $sellOrder")
+                if (sellOrder.status == "FILLED") {
+                    telegramClient.sendNotification("Продав за ${sellOrder.cummulativeQuoteQty}.")
+                    calculateProfit(instance!!.buys, sellOrder)
+                    instance = null
+                }
+            } while (sellOrder.status == "FILLED")
         }
     }
 
     private fun calculateProfit(buys: List<OrderResponse>, sell: OrderResponse) {
-        val spent = buys.sumOf { it.executedQty * it.price }
-        val received = sell.executedQty * sell.price
-        val emoji = if (received > spent) "\uF7E2" else "\uF534"
-        telegramClient.sendNotification("Профіт: ${(received-spent).format(2)} $ $emoji")
+        val spent = buys.sumOf { it.cummulativeQuoteQty }
+        val received = sell.cummulativeQuoteQty
+        val emoji = if (received > spent) "\uD83D\uDFE2" else "\uD83D\uDFE2"
+        telegramClient.sendNotification("Профіт: ${(received - spent).format(2)} $ $emoji")
     }
 
 }
