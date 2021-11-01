@@ -44,15 +44,13 @@ class BBStrategy(val binanceClient: BinanceClient, val telegramClient: TelegramC
     @Synchronized
     fun finish() {
         if (instance != null) {
-            do {
-                val sellOrder = binanceClient.createSellOrderMarketPrice(instance!!.currency, instance!!.qty)
-                println("CREATED SELL ORDER: $sellOrder")
-                if (sellOrder.status == "FILLED") {
-                    telegramClient.sendNotification("Продав за ${sellOrder.cummulativeQuoteQty}.")
-                    calculateProfit(instance!!.buys, sellOrder)
-                    instance = null
-                }
-            } while (sellOrder.status == "FILLED")
+            val sellOrder = binanceClient.createSellOrderMarketPrice(instance!!.currency, instance!!.qty)
+            println("CREATED SELL ORDER: $sellOrder")
+            if (sellOrder.status == "FILLED") {
+                telegramClient.sendNotification("Продав за ${sellOrder.cummulativeQuoteQty}.")
+                calculateProfit(instance!!.buys, sellOrder)
+            }
+            instance = null
         }
     }
 
