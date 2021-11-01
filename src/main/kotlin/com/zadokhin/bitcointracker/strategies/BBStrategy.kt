@@ -28,7 +28,6 @@ class BBStrategy(val binanceClient: BinanceClient, val telegramClient: TelegramC
     @Synchronized
     fun process() {
         if (instance != null) {
-            println("process order called...")
             val currency = instance!!.currency
             val currentPrice = binanceClient.getPrice(currency)
             if (currentPrice < instance!!.lastBuyPrice * 0.997) {
