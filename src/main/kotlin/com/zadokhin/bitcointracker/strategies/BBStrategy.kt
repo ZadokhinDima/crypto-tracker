@@ -82,7 +82,7 @@ class StrategyInstance(order: OrderResponse) {
 
     fun addOrder(order: OrderResponse) {
         buys = buys + order
-        lastBuyPrice = order.price
+        lastBuyPrice = order.cummulativeQuoteQty / order.executedQty
         qty += order.executedQty
     }
 }
