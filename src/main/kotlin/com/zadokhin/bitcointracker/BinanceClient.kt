@@ -62,6 +62,53 @@ class BinanceClient(private val restTemplate: RestTemplate, private val cryptoSe
         }
     }
 
+    fun createBuyOrderStopLoss(currency: String, qty: Double, stopPrice: Double): OrderResponse {
+        val url = "api/v3/order"
+        val timestamp = Instant.now().toEpochMilli()
+        val queryText = "symbol=$currency" +
+                "&side=BUY" +
+                "&type=STOP_LOSS" +
+                "&quantity=$qty" +
+                "&newOrderRespType=RESULT" +
+                "&stopPrice=$stopPrice" +
+                "&trailingDelta=100" +
+                "&timestamp=$timestamp"
+
+        val requestEntity = createRequestEntityWithApiKeyAndSignature(url, queryText, HttpMethod.POST)
+
+        val responseEntity = restTemplate.exchange(requestEntity, OrderResponse::class.java)
+        return responseEntity.body !!
+    }
+
+    fun getOrder(currency: String, orderId: Long): OrderResponse {
+        val url = "api/v3/order"
+        val timestamp = Instant.now().toEpochMilli()
+        val queryText = "symbol=$currency" +
+                "&orderId=$orderId" +
+                "&timestamp=$timestamp"
+
+        val requestEntity = createRequestEntityWithApiKeyAndSignature(url, queryText, HttpMethod.GET)
+
+        val responseEntity = restTemplate.exchange(requestEntity, OrderResponse::class.java)
+        return responseEntity.body !!
+    }
+
+    fun createSellOrderTakeProfit(currency: String, qty: Double): OrderResponse {
+        val url = "api/v3/order"
+        val timestamp = Instant.now().toEpochMilli()
+        val queryText = "symbol=$currency" +
+                "&side=BUY" +
+                "&type=MARKET" +
+                "&quantity=$qty" +
+                "&newOrderRespType=RESULT" +
+                "&timestamp=$timestamp"
+
+        val requestEntity = createRequestEntityWithApiKeyAndSignature(url, queryText, HttpMethod.POST)
+
+        val responseEntity = restTemplate.exchange(requestEntity, OrderResponse::class.java)
+        return responseEntity.body !!
+    }
+
     fun createBuyOrderMarketPrice(currency: String, qty: Double): OrderResponse {
         val url = "api/v3/order"
         val timestamp = Instant.now().toEpochMilli()
@@ -69,6 +116,22 @@ class BinanceClient(private val restTemplate: RestTemplate, private val cryptoSe
                 "&side=BUY" +
                 "&type=MARKET" +
                 "&quantity=$qty" +
+                "&newOrderRespType=RESULT" +
+                "&timestamp=$timestamp"
+
+        val requestEntity = createRequestEntityWithApiKeyAndSignature(url, queryText, HttpMethod.POST)
+
+        val responseEntity = restTemplate.exchange(requestEntity, OrderResponse::class.java)
+        return responseEntity.body !!
+    }
+
+    fun createBuyOrderMarketPriceQuoteQuantity(currency: String, quoteQty: Double): OrderResponse {
+        val url = "api/v3/order"
+        val timestamp = Instant.now().toEpochMilli()
+        val queryText = "symbol=$currency" +
+                "&side=BUY" +
+                "&type=MARKET" +
+                "&quoteOrderQty=$quoteQty" +
                 "&newOrderRespType=RESULT" +
                 "&timestamp=$timestamp"
 
@@ -94,16 +157,36 @@ class BinanceClient(private val restTemplate: RestTemplate, private val cryptoSe
         return responseEntity.body !!
     }
 
-    fun createBuyOrder(currency: String, price: Double): OrderResponse {
+    fun createBuyOrder(currency: String, price: Double, qty: Double): OrderResponse {
         val url = "api/v3/order"
         val timestamp = Instant.now().toEpochMilli()
         val queryText = "symbol=$currency" +
                 "&side=BUY" +
                 "&type=STOP_LOSS_LIMIT" +
-                "&stopPrice=${price + 100}" +
+                "&stopPrice=$price" +
                 "&price=$price" +
                 "&timeInForce=GTC" +
-                "&quantity=0.001" +
+                "&quantity=$qty" +
+                "&recvWindow=5000" +
+                "&newOrderRespType=RESULT" +
+                "&timestamp=$timestamp"
+
+        val requestEntity = createRequestEntityWithApiKeyAndSignature(url, queryText, HttpMethod.POST)
+
+        val responseEntity = restTemplate.exchange(requestEntity, OrderResponse::class.java)
+        return responseEntity.body !!
+    }
+
+    fun createSellOrder(currency: String, price: Double, qty: Double): OrderResponse {
+        val url = "api/v3/order"
+        val timestamp = Instant.now().toEpochMilli()
+        val queryText = "symbol=$currency" +
+                "&side=SELL" +
+                "&type=STOP_LOSS_LIMIT" +
+                "&stopPrice=$price" +
+                "&price=$price" +
+                "&timeInForce=GTC" +
+                "&quantity=$qty" +
                 "&recvWindow=5000" +
                 "&newOrderRespType=RESULT" +
                 "&timestamp=$timestamp"
@@ -167,6 +250,7 @@ data class OrderResponse(
     val status: String,
     val timeInForce: String,
     val type: String,
+    val isWorking: Boolean,
     val side: String
 )
 

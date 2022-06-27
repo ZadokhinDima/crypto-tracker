@@ -1,20 +1,29 @@
 package com.zadokhin.bitcointracker
 
+import com.zadokhin.bitcointracker.process.BuyProcess
+import com.zadokhin.bitcointracker.process.Process
 import org.springframework.scheduling.annotation.EnableScheduling
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
 @EnableScheduling
 @Component
-class FeaturesScheduling(val strategiesService: StrategiesService) {
+class FeaturesScheduling(val strategiesService: StrategiesService, val processService: ProcessService) {
 
     val currencies = listOf(
         "BTCUSDT",
     )
 
-    @Scheduled(cron = "0/30 * * * * *")
+    var trackedProcesses: List<Process> = listOf()
+
+    // @Scheduled(cron = "0/30 * * * * *")
     fun bbStrategy() {
         strategiesService.updateBB()
+    }
+
+    @Scheduled(cron = "0/30 * * * * *")
+    fun processUpdate() {
+        processService.updateTrackedProcesses()
     }
 
     //@Scheduled(cron = "0/10 * * * * *")
