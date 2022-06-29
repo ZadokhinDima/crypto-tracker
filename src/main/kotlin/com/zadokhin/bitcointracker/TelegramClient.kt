@@ -11,11 +11,12 @@ class TelegramClient(val restTemplate: RestTemplate) {
 
     @Value("\${bot.token}")
     val botToken: String = ""
+    @Value("\${bot.notification.chat}")
+    val chatId: Long = 0
 
     fun sendNotification(text: String) {
         val telegramBotApiUrl = "https://api.telegram.org"
         val method = "sendMessage"
-        val chatId = -1001477278594L
         val fullUrl = "$telegramBotApiUrl/bot$botToken/$method"
         restTemplate.postForEntity(fullUrl, SendMessageRequest(chatId = chatId, text = text), Any::class.java)
     }

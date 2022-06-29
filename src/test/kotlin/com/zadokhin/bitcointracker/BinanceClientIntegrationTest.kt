@@ -4,15 +4,17 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.test.context.ActiveProfiles
 
 @SpringBootTest
+@ActiveProfiles("shortTest")
 class BinanceClientIntegrationTest(@Autowired val binanceClient: BinanceClient) {
 
     val currency = "BTCBUSD"
 
     @Test
     fun createOrderTest() {
-        val orderResponse = binanceClient.createBuyOrder(currency, 60000.0)
+        val orderResponse = binanceClient.createBuyOrder(currency, 60000.0, 0.1)
         val orderId = orderResponse.orderId
         assertThat(orderId).isNotNull
         val deleteOrderResponse = binanceClient.deleteOrder(currency, orderId)
