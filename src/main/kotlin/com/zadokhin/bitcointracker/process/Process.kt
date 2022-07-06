@@ -4,9 +4,6 @@ import com.zadokhin.bitcointracker.BinanceClient
 import com.zadokhin.bitcointracker.ProcessService
 import com.zadokhin.bitcointracker.PropertiesHolder
 import com.zadokhin.bitcointracker.TelegramClient
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.stereotype.Component
-import javax.annotation.PostConstruct
 
 interface Process {
     fun start()
@@ -26,6 +23,7 @@ class MainProcess (private val binanceClient: BinanceClient,
     var childProcess: Process? = null
 
     override fun start() {
+        telegramClient.sendNotification("Started buy process, current price: $lastPrice")
         childProcess = BuyProcess(binanceClient, telegramClient, propertiesHolder)
         processService.createProcess(childProcess!!)
     }
@@ -35,25 +33,28 @@ class MainProcess (private val binanceClient: BinanceClient,
         if (childProcess == null) {
             val price = binanceClient.getPrice(currency)
             if (price > lastPrice + threshold) {
-                sell()
+                sell(price)
             } else if (price < lastPrice - threshold) {
-                buy()
+                buy(price)
             }
             return
         }
         val child = childProcess!!
         if (child.completed()) {
+            telegramClient.sendNotification("Child process completed, price: ${child.getPrice()}")
             lastPrice = child.getPrice()
             childProcess = null
         }
     }
 
-    private fun sell() {
+    private fun sell(price: Double) {
+        telegramClient.sendNotification("Started sell process, current price: $price")
         childProcess = SellProcess(binanceClient, telegramClient, propertiesHolder)
         processService.createProcess(childProcess!!)
     }
 
-    private fun buy() {
+    private fun buy(price: Double) {
+        telegramClient.sendNotification("Started buy process, current price: $price")
         childProcess = BuyProcess(binanceClient, telegramClient, propertiesHolder)
         processService.createProcess(childProcess!!)
     }

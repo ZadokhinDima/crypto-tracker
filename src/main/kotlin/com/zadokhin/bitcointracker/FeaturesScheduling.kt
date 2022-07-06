@@ -8,7 +8,9 @@ import org.springframework.stereotype.Component
 
 @EnableScheduling
 @Component
-class FeaturesScheduling(val strategiesService: StrategiesService, val processService: ProcessService) {
+class FeaturesScheduling(val strategiesService: StrategiesService,
+                         val processService: ProcessService,
+                         val telegramClient: TelegramClient) {
 
     val currencies = listOf(
         "BTCUSDT",
@@ -24,6 +26,11 @@ class FeaturesScheduling(val strategiesService: StrategiesService, val processSe
     @Scheduled(cron = "0/30 * * * * *")
     fun processUpdate() {
         processService.updateTrackedProcesses()
+    }
+
+    @Scheduled(cron = "0 0/15 * * * *")
+    fun notifyAlive() {
+        telegramClient.sendNotification("Єбашу!")
     }
 
     //@Scheduled(cron = "0/10 * * * * *")
