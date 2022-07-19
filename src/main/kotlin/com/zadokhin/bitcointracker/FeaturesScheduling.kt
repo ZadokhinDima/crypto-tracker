@@ -1,6 +1,5 @@
 package com.zadokhin.bitcointracker
 
-import com.zadokhin.bitcointracker.process.BuyProcess
 import com.zadokhin.bitcointracker.process.Process
 import org.springframework.scheduling.annotation.EnableScheduling
 import org.springframework.scheduling.annotation.Scheduled
@@ -8,9 +7,10 @@ import org.springframework.stereotype.Component
 
 @EnableScheduling
 @Component
-class FeaturesScheduling(val strategiesService: StrategiesService,
-                         val processService: ProcessService,
-                         val telegramClient: TelegramClient) {
+class FeaturesScheduling(
+    val strategiesService: StrategiesService,
+    val processService: ProcessService
+) {
 
     val currencies = listOf(
         "BTCUSDT",
@@ -28,9 +28,9 @@ class FeaturesScheduling(val strategiesService: StrategiesService,
         processService.updateTrackedProcesses()
     }
 
-    @Scheduled(cron = "0 0/15 * * * *")
+    @Scheduled(cron = "0 0/10 * * * *")
     fun notifyAlive() {
-        telegramClient.sendNotification("Єбашу!")
+        processService.checkAlive()
     }
 
     //@Scheduled(cron = "0/10 * * * * *")

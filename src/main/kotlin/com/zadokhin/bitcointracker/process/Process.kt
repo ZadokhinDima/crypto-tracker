@@ -1,62 +1,98 @@
 package com.zadokhin.bitcointracker.process
 
-import com.zadokhin.bitcointracker.BinanceClient
-import com.zadokhin.bitcointracker.ProcessService
-import com.zadokhin.bitcointracker.PropertiesHolder
-import com.zadokhin.bitcointracker.TelegramClient
+import com.zadokhin.bitcointracker.*
+import com.zadokhin.bitcointracker.process.MainProcessStatus.*
+import com.zadokhin.bitcointracker.process.ChildProcessStatus.*
+import java.lang.IllegalStateException
 
 interface Process {
     fun start()
     fun update()
     fun completed(): Boolean
     fun getPrice(): Double
+    fun alive()
 }
 
-class MainProcess (private val binanceClient: BinanceClient,
-                   private val telegramClient: TelegramClient,
-                   private val processService: ProcessService,
-                   private val propertiesHolder: PropertiesHolder): Process {
-
-    val currency: String = "BTCUSDT"
-    var lastPrice: Double = binanceClient.getPrice(currency)
+class MainProcess(
+    private val binanceClient: BinanceClient,
+    private val telegramClient: TelegramClient,
+    private val processService: ProcessService,
+    private val propertiesHolder: PropertiesHolder
+) : Process {
     private val threshold = propertiesHolder.mainThreshold
+    private val currency = propertiesHolder.currency
     var childProcess: Process? = null
+    private val state: MainProcessState
+
+    init {
+        val price = binanceClient.getPrice(currency)
+        state = MainProcessState(price, price, CREATED)
+    }
 
     override fun start() {
-        telegramClient.sendNotification("Started buy process, current price: $lastPrice")
-        childProcess = BuyProcess(binanceClient, telegramClient, propertiesHolder)
-        processService.createProcess(childProcess!!)
+        notifyState("START")
     }
 
     @Synchronized
     override fun update() {
-        if (childProcess == null) {
-            val price = binanceClient.getPrice(currency)
-            if (price > lastPrice + threshold) {
-                sell(price)
-            } else if (price < lastPrice - threshold) {
-                buy(price)
-            }
-            return
+        when (state.status) {
+            CREATED, AFTER_BUY, AFTER_SELL -> tryCreateBuyOrSell()
+            WAITING_BUY, WAITING_SELL -> waitChecks()
         }
-        val child = childProcess!!
+    }
+
+    override fun alive() {
+        notifyState("ALIVE")
+    }
+
+    private fun tryCreateBuyOrSell() {
+        val price = binanceClient.getPrice(currency)
+        state.currentPrice = price
+        childProcess = tryCreateSell(price) ?: tryCreateBuy(price)
+    }
+
+    private fun tryCreateBuy(currentPrice: Double) = if (checkBuyCondition(currentPrice)) buy() else null
+    private fun tryCreateSell(currentPrice: Double) = if (checkSellCondition(currentPrice)) sell() else null
+
+    private fun checkBuyCondition(currentPrice: Double): Boolean = currentPrice < state.lastPrice - threshold
+    private fun checkSellCondition(currentPrice: Double): Boolean = currentPrice > state.lastPrice + threshold
+
+    private fun waitChecks() {
+        state.currentPrice = binanceClient.getPrice(currency)
+        val child = childProcess!! //Should be not null cause we are waiting for childProcessToFinish
         if (child.completed()) {
-            telegramClient.sendNotification("Child process completed, price: ${child.getPrice()}")
-            lastPrice = child.getPrice()
+            val newStatus = when (state.status) {
+                WAITING_BUY -> AFTER_BUY
+                WAITING_SELL -> AFTER_SELL
+                else -> throw IllegalStateException("INCORRECT WAIT STATUS: ${state.status}")
+            }
+            state.status = newStatus
+            state.lastPrice = child.getPrice()
             childProcess = null
+            notifyState("BUY/SELL FINISHED")
         }
     }
 
-    private fun sell(price: Double) {
-        telegramClient.sendNotification("Started sell process, current price: $price")
-        childProcess = SellProcess(binanceClient, telegramClient, propertiesHolder)
-        processService.createProcess(childProcess!!)
+    private fun sell(): SellProcess {
+        val sellProcess = SellProcess(binanceClient, telegramClient, propertiesHolder)
+        processService.createProcess(sellProcess)
+        state.status = WAITING_SELL
+        state.lastPrice = sellProcess.getPrice()
+        notifyState("SELL")
+        return sellProcess
     }
 
-    private fun buy(price: Double) {
-        telegramClient.sendNotification("Started buy process, current price: $price")
-        childProcess = BuyProcess(binanceClient, telegramClient, propertiesHolder)
-        processService.createProcess(childProcess!!)
+    private fun buy(): BuyProcess {
+        val buyProcess = BuyProcess(binanceClient, telegramClient, propertiesHolder)
+        processService.createProcess(buyProcess)
+        state.status = WAITING_BUY
+        state.lastPrice = buyProcess.getPrice()
+        notifyState("BUY")
+        return buyProcess
+    }
+
+    private fun notifyState(event: String) {
+        telegramClient.sendNotification("[$event] MAIN PROCESS STATE($state)")
     }
 
     override fun completed(): Boolean {
@@ -64,110 +100,127 @@ class MainProcess (private val binanceClient: BinanceClient,
     }
 
     override fun getPrice(): Double {
-        return lastPrice
+        return state.lastPrice
     }
-
-
 }
 
+abstract class ChildProcess(
+    protected val binanceClient: BinanceClient,
+    private val telegramClient: TelegramClient,
+    propertiesHolder: PropertiesHolder
+) : Process {
+    val currency = propertiesHolder.currency
+    val threshold = propertiesHolder.buyThreshold
+    val tradeSize = propertiesHolder.tradeSize
+    val state: ChildProcessState
 
-class BuyProcess (private val binanceClient: BinanceClient, private val telegramClient: TelegramClient, private val propertiesHolder: PropertiesHolder): Process {
-    var completed = false
-    val currency: String = "BTCUSDT"
-    var orderId: Long? = null
-    var stopPrice: Double? = null
-    private val threshold = propertiesHolder.buyThreshold
-    private val tradeSize = propertiesHolder.tradeSize
-
-
-    override fun start() {
-        val currentPrice = binanceClient.getPrice(currency)
-        stopPrice = currentPrice + threshold
-        val order = binanceClient.createBuyOrder(currency, stopPrice!!, tradeSize)
-        orderId = order.orderId
-        telegramClient.sendNotification("Ціна $currentPrice, Стоп лосс на ${order.price}$")
-    }
-
-    override fun update() {
-        if (completed)
-            return
-
-        val currentPrice = binanceClient.getPrice(currency)
-        val order = binanceClient.getOrder(currency, orderId!!)
-        if (currentPrice < stopPrice!! - (2 * threshold) && order.status == "NEW") {
-            stopPrice = currentPrice + threshold
-            val updatedOrder = binanceClient.createBuyOrder(currency, stopPrice!!, tradeSize)
-            binanceClient.deleteOrder(currency, orderId!!)
-            orderId = updatedOrder.orderId
-            telegramClient.sendNotification("Ціна $currentPrice, Стоп лосс на ${updatedOrder.price}$")
-        }
-        if (order.status == "FILLED") {
-            telegramClient.sendNotification("Купив за ${order.price}$")
-            completed = true
-        }
+    init {
+        val price = binanceClient.getPrice(currency)
+        state = ChildProcessState(
+            currentPrice = price,
+            stopPrice = calculateStopPrice(price),
+            status = NEW
+        )
     }
 
     override fun completed(): Boolean {
-        return completed
+        return state.status == COMPLETED
     }
 
     override fun getPrice(): Double {
-        return stopPrice!!
+        return state.stopPrice
     }
 
-}
-
-class SellProcess (private val binanceClient: BinanceClient,
-                   private val telegramClient: TelegramClient,
-                   private val propertiesHolder: PropertiesHolder): Process {
-    var completed = false
-    val currency: String = "BTCUSDT"
-    var orderId: Long? = null
-    var stopPrice: Double? = null
-    private val threshold = propertiesHolder.sellThreshold
-    private val tradeSize = propertiesHolder.tradeSize
-
+    override fun alive() {
+        notifyState("LIVENESS")
+    }
 
     override fun start() {
-        val currentPrice = binanceClient.getPrice(currency)
-        stopPrice = currentPrice - threshold
-        val order = binanceClient.createSellOrder(currency, stopPrice!!, tradeSize)
-        orderId = order.orderId
-        telegramClient.sendNotification("Ціна $currentPrice, Стоп лосс на ${order.price}$")
+        val order = createOrder(state.stopPrice)
+        state.status = PROGRESS
+        state.orderId = order.orderId
+        notifyState("START")
     }
 
     override fun update() {
-        if (completed)
-            return
+        when (state.status) {
+            NEW, PROGRESS -> completeOrTryChangePrice()
+            COMPLETED -> return
+        }
+    }
 
+    private fun completeOrTryChangePrice() {
+        if (checkCompleted()) {
+            complete()
+        } else {
+            updatePrices()
+        }
+    }
+
+    private fun checkCompleted(): Boolean = binanceClient.getOrder(currency, state.orderId).status == "FILLED"
+    private fun complete() {
+        state.status = COMPLETED
+        notifyState("COMPLETED")
+    }
+
+    private fun updatePrices() {
         val currentPrice = binanceClient.getPrice(currency)
-        val order = binanceClient.getOrder(currency, orderId!!)
-        if (currentPrice > stopPrice!! + (2 * threshold) && order.status == "NEW") {
-            stopPrice = currentPrice - threshold
-            val updatedOrder = binanceClient.createSellOrder(currency, stopPrice!!, tradeSize)
-            binanceClient.deleteOrder(currency, orderId!!)
-            orderId = updatedOrder.orderId
-            telegramClient.sendNotification("Ціна $currentPrice, Стоп лосс на ${updatedOrder.price}$")
-        }
-        if (order.status == "FILLED") {
-            telegramClient.sendNotification("Продав за ${order.price}$")
-            completed = true
+        state.currentPrice = currentPrice
+        if (shouldRecreateOrder(currentPrice)) {
+            recreateOrder(currentPrice)
+            notifyState("ORDER RECREATED")
         }
     }
 
-    override fun completed(): Boolean {
-        return completed
+    private fun recreateOrder(currentPrice: Double) {
+        val stopPrice = calculateStopPrice(currentPrice)
+        val newOrder = createOrder(stopPrice)
+        binanceClient.deleteOrder(currency, state.orderId)
+        state.orderId = newOrder.orderId
+        state.stopPrice = stopPrice
     }
 
-    override fun getPrice(): Double {
-        return stopPrice!!
+    private fun notifyState(event: String) {
+        telegramClient.sendNotification("[$event] ${type()} PROCESS STATE($state)")
     }
+
+    abstract fun createOrder(stopPrice: Double): OrderResponse
+    abstract fun shouldRecreateOrder(currentPrice: Double): Boolean
+    abstract fun calculateStopPrice(price: Double): Double
+    abstract fun type(): String
+}
+
+class BuyProcess(
+    binanceClient: BinanceClient,
+    telegramClient: TelegramClient,
+    propertiesHolder: PropertiesHolder
+) : ChildProcess(binanceClient, telegramClient, propertiesHolder) {
+
+    override fun createOrder(stopPrice: Double): OrderResponse =
+        binanceClient.createBuyOrder(currency, stopPrice, tradeSize)
+
+    override fun shouldRecreateOrder(currentPrice: Double) =
+        currentPrice < state.stopPrice - threshold
+
+    override fun calculateStopPrice(price: Double) = price + threshold
+
+    override fun type() = "BUY"
 
 }
 
+class SellProcess(
+    binanceClient: BinanceClient,
+    telegramClient: TelegramClient,
+    propertiesHolder: PropertiesHolder
+) : ChildProcess(binanceClient, telegramClient, propertiesHolder) {
 
-data class Order(val operation: Operation, val price: Double)
+    override fun createOrder(stopPrice: Double): OrderResponse =
+        binanceClient.createSellOrder(currency, stopPrice, tradeSize)
 
-enum class Operation {
-    BUY, SELL
+    override fun shouldRecreateOrder(currentPrice: Double) =
+        currentPrice > state.stopPrice + threshold
+
+    override fun calculateStopPrice(price: Double) = price - threshold
+
+    override fun type() = "SELL"
 }

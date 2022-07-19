@@ -17,4 +17,8 @@ class ProcessService {
         trackedProcesses = trackedProcesses.filter { !it.completed() }
         trackedProcesses.forEach { it.update() }
     }
+
+    fun checkAlive() {
+        trackedProcesses.forEach { it.alive() }
+    }
 }

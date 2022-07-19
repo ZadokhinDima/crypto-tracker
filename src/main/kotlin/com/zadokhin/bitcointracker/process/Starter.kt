@@ -22,10 +22,10 @@ class Starter(val binanceClient: BinanceClient, val processService: ProcessServi
                 Bot started. 
                 Properties:
                 Binance host: ${propertiesHolder.binanceHost}
+                Currency: ${propertiesHolder.currency}
                 Trade size: ${propertiesHolder.tradeSize}
                 Main threshold: ${propertiesHolder.mainThreshold}
                 Buy threshold: ${propertiesHolder.buyThreshold}
-                Sell threshold: ${propertiesHolder.sellThreshold}
         """.trimIndent()
         telegramClient.sendNotification(startMessage)
     }

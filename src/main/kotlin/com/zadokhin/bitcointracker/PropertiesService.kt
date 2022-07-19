@@ -10,11 +10,11 @@ class PropertiesHolder {
     val mainThreshold = 750
     @Value("\${process.buy.threshold}")
     val buyThreshold = 100
-    @Value("\${process.sell.threshold}")
-    val sellThreshold = 100
     @Value("\${process.trade.size}")
     val tradeSize = 0.01
     @Value("\${binance.api.host}")
     val binanceHost: String = ""
+    @Value("\${process.trade.currency}")
+    val currency: String = ""
 
 }
